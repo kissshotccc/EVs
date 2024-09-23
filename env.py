@@ -55,10 +55,6 @@ class EVs_Env(gym.Env):
         self.current_power = self.init_power
         # 当前处在几号节点
         self.current = self.start
-        # 执行的步数
-        self.steps = 0
-        # 最大移动步数
-        self.max_steps = 5
 
     # 环境重置函数
     def reset(self):
@@ -70,7 +66,6 @@ class EVs_Env(gym.Env):
         self.consumption = self.EVs['consumption'] / 100    # 注意单位
 
         self.current = self.start
-        self.steps = 0
 
         self.remain_time = self.dead_line
         self.current_power = self.init_power
@@ -82,8 +77,6 @@ class EVs_Env(gym.Env):
         # 如果选择去的下一个节点是当前节点的话，重新选择
         while action == self.current:
             action = self.sample()
-
-        self.steps += 1
 
         is_charge = self.roads[self.current][action]     # 是否充电路段
         distance = self.distance[self.current][action]   # 距离
@@ -104,18 +97,18 @@ class EVs_Env(gym.Env):
 
         # 执行动作后，如果剩余时间<0或者电量<0则表示在半路就终止了
         if self.remain_time < 0:
-            return self._get_state(), -10, True, self.steps >= self.max_steps, {}
+            return self._get_state(), 0, True, {}
 
         if self.current_power < 0:
-            return self._get_state(), -50, True, self.steps >= self.max_steps, {}
+            return self._get_state(), 0, True, {}
 
         # 否则更新当前位置为执行动作后的位置
         self.current = action
 
         if self.current == self.end:
-            return self._get_state(), self.current_power, True, self.steps >= self.max_steps, {}
+            return self._get_state(), self.current_power, True, {}
         else:
-            return self._get_state(), self.current_power, False, self.steps >= self.max_steps, {}
+            return self._get_state(), 0, False, {}
 
     # 在动作空间随机选择一个动作
     def sample(self):
