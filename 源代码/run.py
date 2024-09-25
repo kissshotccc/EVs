@@ -66,6 +66,8 @@ def DQN_train(env, num):
     max_steps = 500  # 每个回合的最大步数
     batch_size = 32  # 采样数量
 
+    training_time = []
+
     # 创建DQN对象
     agent = DQN(env)
 
@@ -128,7 +130,6 @@ def DQN_train(env, num):
     plt.plot(episode_rewards)
     plt.title("reward")
     plt.show()
-
 
 def DQN_test(env, num, max_steps=500):
     # 创建DQN对象
@@ -198,11 +199,32 @@ if __name__ == '__main__':
     #     env.reset()
     #     DQN_train(env, i)
 
-    # 测试50辆车
-    for i in range(len(EVs)):
-        env = EVs_Env(EVs[i], env_info)
-        env.reset()
-        DQN_test(env, i)
+
+    # 生成50轮结果，即50轮总电量，最后取平均值
+    res = 0
+    for k in range(50):
+        # 打开 CSV 文件，使用写模式 'w' 清空文件内容
+        with open('../输出结果/results_all.csv', 'w', newline='', encoding='utf-8') as file:
+            pass  # 不写入任何内容，相当于清空文件
+        # 打开 CSV 文件，使用写模式 'w' 清空文件内容
+        with open('../输出结果/results_detail.csv', 'w', newline='', encoding='utf-8') as file:
+            pass  # 不写入任何内容，相当于清空文件
+
+        # 测试50辆车
+        for i in range(len(EVs)):
+            env = EVs_Env(EVs[i], env_info)
+            env.reset()
+            DQN_test(env, i)
+
+        # 读取 CSV 文件
+        df = pd.read_csv('../输出结果/results_all.csv', header=None)
+
+        # 获取第二列并计算和（假设第二列的索引为1）
+        total_power = df.iloc[:, 1].sum()
+        res += total_power
+
+    print(res/50)
+
 
     # 单辆测试
     # env = EVs_Env(EVs[0], env_info)

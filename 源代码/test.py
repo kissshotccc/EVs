@@ -15,3 +15,14 @@ with open('test.csv', 'a', newline='', encoding='utf-8') as file:
     # 写入数据（追加一行）
     for row in a:
         writer.writerow(row)
+
+import pandas as pd
+
+# 读取 CSV 文件
+df = pd.read_csv('test.csv', header=None)
+
+# 获取第二列并计算和（假设第二列的索引为1）
+second_column_sum = df.iloc[:, 1].sum()
+
+# 打印第二列的和
+print("第二列的总和：", second_column_sum)
