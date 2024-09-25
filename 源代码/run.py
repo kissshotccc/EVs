@@ -114,8 +114,6 @@ def DQN_train(env, num):
             tqdm.write("Episode " + str(episode) + ": " + str(episode_reward) + "====>path:" + str(path))
 
 
-    with open('../输出结果/rewards.csv', 'w', newline='', encoding='utf-8') as file:
-        pass
     # 以追加模式 'a' 打开 CSV 文件
     with open('../输出结果/rewards.csv', 'a', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
@@ -127,9 +125,9 @@ def DQN_train(env, num):
     torch.save(agent.model.state_dict(), model_path)
 
     # 使用Matplotlib绘制奖励值的曲线图
-    # plt.plot(episode_rewards)
-    # plt.title("reward")
-    # plt.show()
+    plt.plot(episode_rewards)
+    plt.title("reward")
+    plt.show()
 
 
 def DQN_test(env, num, max_steps=500):
@@ -175,20 +173,12 @@ def DQN_test(env, num, max_steps=500):
             break
 
     # 保存到csv
-
-    # 清除旧数据
-    with open('../输出结果/results_detail.csv', 'w', newline='', encoding='utf-8') as file:
-        pass
-
     with open('../输出结果/results_detail.csv', 'a', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         # 写入数据（追加一行）
         writer.writerow(info_list)
         writer.writerow(path_list)
         writer.writerow(power_time_list)
-
-    with open('../输出结果/results_all.csv', 'w', newline='', encoding='utf-8') as file:
-        pass
 
     with open('../输出结果/results_all.csv', 'a', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
