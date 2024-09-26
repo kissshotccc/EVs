@@ -74,6 +74,9 @@ def DQN_train(env, num):
     # 定义保存每个回合奖励的列表
     episode_rewards = [num]
 
+    # 保存每个回合的剩余电量
+    episode_power = []
+
     # 开始循环，tqdm用于显示进度条并评估任务时间开销
     for episode in tqdm(range(max_episodes), file=sys.stdout):
         # 重置环境并获取初始状态
@@ -111,6 +114,12 @@ def DQN_train(env, num):
         # 记录当前回合奖励值
         episode_rewards.append(episode_reward)
 
+        # 训练完一幕后剩余电量
+        if env.current == env.end:
+            episode_power.append(env.current_power)
+        else:
+            episode_power.append(0)
+
         # 打印中间值
         if episode % 40 == 0:
             tqdm.write("Episode " + str(episode) + ": " + str(episode_reward) + "====>path:" + str(path))
@@ -127,8 +136,13 @@ def DQN_train(env, num):
     torch.save(agent.model.state_dict(), model_path)
 
     # 使用Matplotlib绘制奖励值的曲线图
-    plt.plot(episode_rewards)
-    plt.title("reward")
+    # plt.plot(episode_rewards)
+    # plt.title("episode_rewards")
+    # plt.show()
+
+    # 绘制最终剩余电量
+    plt.plot(episode_power)
+    plt.title("remain_power")
     plt.show()
 
 def DQN_test(env, num, max_steps=500):
@@ -158,7 +172,7 @@ def DQN_test(env, num, max_steps=500):
     for step in range(max_steps):
         pre = env.current
         # 使用模型选择动作（不使用epsilon-greedy策略，直接用模型的输出）
-        action = agent.choose_action(state)
+        action = agent.choose_action(state, epsilon=-1)
         next_state, reward, terminated, info = env.step(action)
 
         path_list.append((pre,env.current))
@@ -194,14 +208,14 @@ if __name__ == '__main__':
     # print(json.dumps(EVs_50, indent=2))
 
     # 训练50辆车
-    # for i in range(len(EVs)):
-    #     env = EVs_Env(EVs[i], env_info)
-    #     env.reset()
-    #     DQN_train(env, i)
+    for i in range(len(EVs)):
+        env = EVs_Env(EVs[i], env_info)
+        env.reset()
+        DQN_train(env, i)
 
 
     # 生成50轮结果，即50轮总电量，最后取平均值
-    res = 0
+    res = np.array([])
     for k in range(50):
         # 打开 CSV 文件，使用写模式 'w' 清空文件内容
         with open('../输出结果/results_all.csv', 'w', newline='', encoding='utf-8') as file:
@@ -221,9 +235,11 @@ if __name__ == '__main__':
 
         # 获取第二列并计算和（假设第二列的索引为1）
         total_power = df.iloc[:, 1].sum()
-        res += total_power
+        res = np.append(res, total_power)
 
-    print(res/50)
+    print(f'均值：{res.mean()}')
+    print(f'最大值：{res.max()}')
+    print(f'最小值：{res.min()}')
 
 
     # 单辆测试
