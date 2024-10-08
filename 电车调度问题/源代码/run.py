@@ -3,10 +3,11 @@ import shutil
 import numpy as np
 import pandas as pd
 import torch
-
 from env import EVs_Env
 from DQN import DQN
 import csv
+import openpyxl
+from openpyxl import Workbook
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -55,7 +56,6 @@ def init_data():
         'node_road': node_road
     }
     return EVs, env_info
-
 
 def get_max_model(dir_path):
     pattern = re.compile(r"model_(\d+)\.pth")
@@ -106,16 +106,68 @@ def save_best_model(model_path,num):
     if not os.path.isfile(new_model_path):
         shutil.copy(model_path,destination_path)
 
+def save_results(results_detail, results_all):
+
+    # 打开或创建 results.xlsx 文件
+    file_name = "../输出结果/results.xlsx"
+    try:
+        wb = openpyxl.load_workbook(file_name)
+    except FileNotFoundError:
+        wb = Workbook()
+        if 'Sheet' in wb.sheetnames:
+            wb.remove(wb['Sheet'])
+
+    # 如果表不存在，创建 "调度详情"
+    if "调度详情" not in wb.sheetnames:
+        ws_detail = wb.create_sheet(title="调度详情")
+    else:
+        ws_detail = wb["调度详情"]
+
+    # 如果表不存在，创建 "汇总"
+    if "汇总" not in wb.sheetnames:
+        ws_all = wb.create_sheet(title="汇总")
+    else:
+        ws_all = wb["汇总"]
+
+    # 清空表
+    ws_detail.delete_rows(1, ws_detail.max_row)
+    ws_all.delete_rows(1, ws_all.max_row)
+
+    # 将数据写入 Excel
+    for data_set in results_detail:
+        for row_data in data_set:
+            row = []
+            for item in row_data:
+                if isinstance(item, list) or isinstance(item, tuple):
+                    # 将元组或列表作为字符串存入单元格
+                    row.append(str(item))
+                else:
+                    row.append(item)
+
+            # 将行添加到 Excel
+            ws_detail.append(row)
+
+    for data_set in results_all:
+        for row_data in data_set:
+            ws_all.append(row_data)  # 直接追加每一行的子列表
+
+    # 计算第二列的总和
+    second_column_sum = 0
+    for row in ws_all.iter_rows(min_row=1, max_row=ws_all.max_row, min_col=2, max_col=2):
+        for cell in row:
+            second_column_sum += cell.value
+
+    # 在最后一行写入 'total' 和第二列的总和
+    ws_all.append(['total', second_column_sum])
+
+    # 保存 Excel 文件
+    wb.save(file_name)
+
 
 def DQN_test(env, num, model_path, max_steps=500):
     # 创建DQN对象
     agent = DQN(env)
 
-    # # 加载保存的模型权重
-    # model_num = get_max_model(f'./model/best_power_path{num+1}')
-    # print(model_num)
-    # model_path = f'./model/best_power_path{num+1}/model_{model_num}.pth'
-    # # model_path = f'./model/best_power_path/model_car_{num+1}.pth'
     agent.model.load_state_dict(torch.load(model_path))
     agent.model.eval()  # 设置模型为评估模式
 
@@ -155,19 +207,11 @@ def DQN_test(env, num, model_path, max_steps=500):
                 summary.append([num, 0, env.remain_time])
                 last_power = 0
             break
-    #保存到csv
-    with open('../输出结果/results_detail.csv', 'a', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        # 写入数据（追加一行）
-        writer.writerow(info_list)
-        writer.writerow(path_list)
-        writer.writerow(power_time_list)
 
-    with open('../输出结果/results_all.csv', 'a', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        # 写入数据（追加一行）
-        for row in summary:
-            writer.writerow(row)
+    global result_detail
+    global result_all
+    result_detail.append([info_list, path_list, power_time_list])
+    result_all.append(summary)
 
     return last_power
 
@@ -176,36 +220,13 @@ if __name__ == "__main__":
     EVs, env_info = init_data()
     # 生成50轮结果，即50轮总电量，最后取平均值
     res = 0
-    # loss_car_list = []
-    # # for i in range(50):
-    # test_list = [40]
-    # for i in test_list:
-    #     i -= 1
-    #     env = EVs_Env(EVs[i], env_info)
-    #     env.reset()
-    #     if get_best_model(env,i) != -1:
-    #         loss_car_list.append(get_best_model(env,i))
-    # print(loss_car_list)
-    for k in range(1):
-        # 打开 CSV 文件，使用写模式 'w' 清空文件内容
-        with open('../输出结果/results_all.csv', 'w', newline='', encoding='utf-8') as file:
-            pass  # 不写入任何内容，相当于清空文件
-        # 打开 CSV 文件，使用写模式 'w' 清空文件内容
-        with open('../输出结果/results_detail.csv', 'w', newline='', encoding='utf-8') as file:
-            pass  # 不写入任何内容，相当于清空文件
+    result_detail = []
+    result_all = []
+    for i in range(len(EVs)):
+        env = EVs_Env(EVs[i], env_info)
+        env.reset()
+        # # 加载保存的模型权重
+        model_path = f'./model/best_power_path/car_{i+1}.pth'
+        DQN_test(env, i,model_path)
 
-        # 测试1辆车
-        for i in range(len(EVs)):
-            env = EVs_Env(EVs[i], env_info)
-            env.reset()
-            # # 加载保存的模型权重
-            model_path = f'./model/best_power_path/car_{i+1}.pth'
-            DQN_test(env, i,model_path)
-
-        # 读取 CSV 文件
-        df = pd.read_csv('../输出结果/results_all.csv', header=None)
-
-        # 获取第二列并计算和（假设第二列的索引为1）
-        total_power = df.iloc[:, 1].sum()
-        res += (total_power)
-    print(res/1)
+    save_results(result_detail, result_all)
