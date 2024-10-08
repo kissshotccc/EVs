@@ -76,6 +76,7 @@ class EVs_Env(gym.Env):
 
         # 如果选择去的下一个节点是当前节点的话，重新选择
         while action == self.current:
+            # print('重新选择动作')
             action = self.sample()
 
         is_charge = self.roads[self.current][action]     # 是否充电路段
