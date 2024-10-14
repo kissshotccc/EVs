@@ -11,12 +11,6 @@ import collections
 from tqdm import *  # 用于显示进度条
 
 
-def rand_sample_mask(action_space,current):
-    action_mask = np.ones(action_space.n,dtype=int)
-    action_mask[current] = 0
-    valid_action = np.where(action_mask==1)[0]
-    return np.random.choice(valid_action)
-
 # 定义简单神经网络
 class Net(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -90,11 +84,20 @@ class DQN:
         # 记录模型更新的次数，用于决定何时更新目标模型
         self.update_count = 0
 
+    # def rand_sample_mask(action_space,current):
+    #     action_mask = np.ones(action_space.n,dtype=int)
+    #     action_mask[current] = 0
+    #     valid_action = np.where(action_mask==1)[0]
+    #     return np.random.choice(valid_action)
+
     # 根据epsilon-greedy策略选择动作
     def choose_action(self, state):
         self.epsilon -=  self.coe
         if np.random.rand() < self.epsilon :  # 以epsilon的概率随机选择一个动作
-            return rand_sample_mask(self.env.action_space,self.env.current)
+            # return self.rand_sample_mask(self.env.action_space,self.env.current)
+            action = self.env.node_road[self.env.current]
+            valid_action = np.where(action == 1)[0]
+            return np.random.choice(valid_action)
         else:  # 否则选择模型认为最优的动作
             state = torch.FloatTensor(np.array([state])).to(self.device)
             q_values = self.model(state).detach().cpu().numpy()[0]
@@ -141,7 +144,7 @@ class DQN:
         batch = self.replay_buffer.sample(batch_size)
         # 计算这部分数据的损失
         loss = self.compute_loss(batch)
-
+        count_loss = loss
         # 梯度清零，反向传播，更新参数
         self.optimizer.zero_grad()
         loss.backward()

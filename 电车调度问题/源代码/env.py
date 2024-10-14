@@ -1,7 +1,7 @@
+import random
+
 import gym
 import numpy as np
-from matplotlib import pyplot as plt
-from IPython import display
 from gym import spaces
 import math
 
@@ -20,17 +20,19 @@ class EVs_Env(gym.Env):
         self.node_num = len(self.data)
         self.EVs = EVs
 
-        # 定义动作空间,动作空间为[0,1,2,...,49],选择动作n表示到n号节点
-        self.action_space = spaces.Discrete(self.node_num)
-        # # 定义观测空间
-        self.observation_space = spaces.Box(low=0, high=1, shape=(3, 1), dtype=np.uint8)
-
         self.start = self.EVs['start']
         self.end = self.EVs['end']
         self.init_power = self.EVs['init_power']
         self.max_power = self.EVs['max_power']
         self.dead_line = self.EVs['dead_line']
         self.consumption = self.EVs['consumption'] / 100
+
+        # 定义动作空间,选择动作n表示到n号节点
+        self.action_space = spaces.Discrete(self.node_num)
+        # # 定义观测空间
+        low = np.array([0, 0, 0], dtype=np.float32)  # 分别对应 self.current, self.current_power, self.remain_time 的最小值
+        high = np.array([self.node_num - 1, self.max_power, self.dead_line],dtype=np.float32)  # 分别对应 self.current, self.current_power, self.remain_time 的最大值
+        self.observation_space = spaces.Box(low=low, high=high, shape=(3,), dtype=np.float32)
 
         #后续补充新的属性
         self.success = False    #用于评判模型优劣
@@ -44,6 +46,9 @@ class EVs_Env(gym.Env):
 
         # 用于动态更新奖励函数
         self.episode = 0
+
+        # 用于存储走过的路径,初始为起点
+        self.path = [self.current]
 
     # 环境重置函数
     def reset(self):
@@ -59,17 +64,39 @@ class EVs_Env(gym.Env):
         self.remain_time = self.dead_line
         self.current_power = self.init_power
         self.last_action = self.start
+        self.path = [self.current]
         return self._get_state(), {}
 
-    # 动作执行函数    函数返回[ns, reward, terminated, info]
+    def refresh(self):
+        # 当前电量
+        self.current_power = random.uniform(0, self.max_power)
+
+        # 当前位置，不包含终点
+        while True:
+            self.current = random.randint(0, 99)
+            if self.current != self.end:
+                break
+
+        # 当前剩余时间
+        self.remain_time = random.uniform(0, 4)
+
+        self.start = self.current
+        self.init_power = self.current_power
+        self.path = [self.current]
+
+        return self._get_state(), {}
+
+    # 动作执行函数    函数返回[state, reward, terminated, info]
     def step(self, action):
+        if self.node_road[self.current][action] == 0:
+            return self._get_state(), -10, True, {}
+
         is_charge = self.roads[self.current][action]     # 是否充电路段
         distance = self.distance[self.current][action]   # 距离
         speed = self.speed[self.current][action]         # 行驶速度
         time_consuming = distance / speed  # 行驶耗时
         if time_consuming == 0:
             print("jinggao")
-        # time_consuming = distance/speed                  # 行驶耗时
         self.remain_time -= time_consuming               # 剩余时间
         consumption = distance * self.consumption        # 行驶消耗
 
@@ -121,9 +148,13 @@ class EVs_Env(gym.Env):
         else:
             self.current_power -= consumption
 
-
-        # 无论怎样都要更新当前位置为执行动作后的位置，否则你还没做下一步，你怎么就知道你会失败呢
-        self.current = action
+        if action in self.path:
+            # 给一个惩罚
+            pass
+        else:
+            # 无论怎样都要更新当前位置为执行动作后的位置，否则你还没做下一步，你怎么就知道你会失败呢
+            self.current = action
+            self.path.append(action)
 
         # 执行动作后，如果剩余时间<0或者电量<0则表示在半路就终止了
         if self.remain_time < 0:

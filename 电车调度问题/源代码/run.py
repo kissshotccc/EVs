@@ -8,54 +8,10 @@ from DQN import DQN
 import csv
 import openpyxl
 from openpyxl import Workbook
-
+from data import get_data, get_model_name
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
-
-def init_data():
-    # 50个节点
-    data_50_temp = pd.read_csv('data_set/data_50.csv', header=None)
-    data = []
-    for i in range(0, 50):
-        data.append((data_50_temp.iloc[i][0], data_50_temp.iloc[i][1]))
-
-    # 节点间距离
-    distance_50_temp = pd.read_csv('data_set/distance_50.csv', header=None)
-    distance = distance_50_temp.values
-
-    # 两节点之间是否为充电路段
-    roads_50_temp = pd.read_csv('data_set/roads_50.csv', header=None)
-    roads = roads_50_temp.values
-
-    # 两个节点之间的行驶速度
-    speed_50_temp = pd.read_csv('data_set/speed_50.csv', header=None)
-    speed = speed_50_temp.values
-
-    # 每辆电车的信息
-    EVs_50_temp = pd.read_csv('data_set/EVs_50.csv', header=None)
-    EVs = {}
-    for i in range(0, 50):
-        EVs[i] = {}
-        EVs[i]['start'] = data.index((EVs_50_temp.iloc[i][0], EVs_50_temp.iloc[i][1]))
-        EVs[i]['end'] = data.index((EVs_50_temp.iloc[i][2], EVs_50_temp.iloc[i][3]))
-        EVs[i]['init_power'] = EVs_50_temp.iloc[i][4]
-        EVs[i]['max_power'] = EVs_50_temp.iloc[i][5]
-        EVs[i]['dead_line'] = EVs_50_temp.iloc[i][6]
-        EVs[i]['consumption'] = EVs_50_temp.iloc[i][7]
-
-    node_road = np.ones((50, 50))
-    # 将主对角线元素设为0
-    np.fill_diagonal(node_road, 0)
-
-    env_info = {
-        'data': data,
-        'distance': distance,
-        'speed': speed,
-        'roads' : roads,
-        'node_road': node_road
-    }
-    return EVs, env_info
 
 def get_max_model(dir_path):
     pattern = re.compile(r"model_(\d+)\.pth")
@@ -217,7 +173,7 @@ def DQN_test(env, num, model_path, max_steps=500):
 
 
 if __name__ == "__main__":
-    EVs, env_info = init_data()
+    EVs, env_info = get_data()
     # 生成50轮结果，即50轮总电量，最后取平均值
     res = 0
     result_detail = []

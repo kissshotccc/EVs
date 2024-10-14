@@ -1,15 +1,10 @@
 import csv
-import json
-import sys
-
 import numpy as np
+import openpyxl
+from openpyxl import Workbook
 import pandas as pd
 import torch
-from matplotlib import pyplot as plt
-from tqdm import *  # 用于显示进度条
-
-from env import GymHelper, EVs_Env
-from PPO import PPO
+from env import EVs_Env
 from DQN import DQN
 
 import os
@@ -18,25 +13,25 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 def init_data():
     # 50个节点
-    data_50_temp = pd.read_csv('data_set/data_50.csv', header=None)
+    data_50_temp = pd.read_csv('数据集/data_50.csv', header=None)
     data = []
     for i in range(0, 50):
         data.append((data_50_temp.iloc[i][0], data_50_temp.iloc[i][1]))
 
     # 节点间距离
-    distance_50_temp = pd.read_csv('data_set/distance_50.csv', header=None)
+    distance_50_temp = pd.read_csv('数据集/distance_50.csv', header=None)
     distance = distance_50_temp.values
 
     # 两节点之间是否为充电路段
-    roads_50_temp = pd.read_csv('data_set/roads_50.csv', header=None)
+    roads_50_temp = pd.read_csv('数据集/roads_50.csv', header=None)
     roads = roads_50_temp.values
 
     # 两个节点之间的行驶速度
-    speed_50_temp = pd.read_csv('data_set/speed_50.csv', header=None)
+    speed_50_temp = pd.read_csv('数据集/speed_50.csv', header=None)
     speed = speed_50_temp.values
 
     # 每辆电车的信息
-    EVs_50_temp = pd.read_csv('data_set/EVs_50.csv', header=None)
+    EVs_50_temp = pd.read_csv('数据集/EVs_50.csv', header=None)
     EVs = {}
     for i in range(0, 50):
         EVs[i] = {}
@@ -55,102 +50,18 @@ def init_data():
         'data': data,
         'distance': distance,
         'speed': speed,
-        'roads' : roads,
+        'roads': roads,
         'node_road': node_road
     }
     return EVs, env_info
 
-def DQN_train(env, num):
-    # 定义超参数
-    max_episodes = 2000  # 训练episode数量
-    max_steps = 500  # 每个回合的最大步数
-    batch_size = 32  # 采样数量
-
-    training_time = []
-
-    # 创建DQN对象
-    agent = DQN(env)
-
-    # 定义保存每个回合奖励的列表
-    episode_rewards = [num]
-
-    # 保存每个回合的剩余电量
-    episode_power = []
-
-    # 开始循环，tqdm用于显示进度条并评估任务时间开销
-    for episode in tqdm(range(max_episodes), file=sys.stdout):
-        # 重置环境并获取初始状态
-        state, _ = env.reset()
-        # 当前回合的奖励
-        episode_reward = 0
-        path = []
-
-        # 循环进行每一步操作
-        for step in range(max_steps):
-            path.append(env.current)
-            # 根据当前状态选择动作
-            action = agent.choose_action(state)
-            # 执行动作，获取新的信息
-            next_state, reward, terminated, info = env.step(action)
-            # 判断是否达到终止状态
-            done = terminated
-
-            # 将这个五元组加入到缓冲区中
-            agent.replay_buffer.add(state, action, reward, next_state, done)
-            # 累计奖励
-            episode_reward += reward
-
-            # 如果经验回放缓冲区已经有足够数据，就更新网络参数
-            if len(agent.replay_buffer) > batch_size:
-                agent.update(batch_size)
-
-            # 更新当前状态
-            state = next_state
-
-            if done:
-                path.append(env.current)
-                break
-
-        # 记录当前回合奖励值
-        episode_rewards.append(episode_reward)
-
-        # 训练完一幕后剩余电量
-        if env.current == env.end:
-            episode_power.append(env.current_power)
-        else:
-            episode_power.append(0)
-
-        # 打印中间值
-        if episode % 40 == 0:
-            tqdm.write("Episode " + str(episode) + ": " + str(episode_reward) + "====>path:" + str(path))
-
-
-    # 以追加模式 'a' 打开 CSV 文件
-    with open('../输出结果/rewards.csv', 'a', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        # 写入数据（追加一行）
-        writer.writerow(episode_rewards)
-
-    # 每训练完一辆小车，保存网络模型参数
-    model_path = f'./model/dqn_model_car_{num}.pth'
-    torch.save(agent.model.state_dict(), model_path)
-
-    # 使用Matplotlib绘制奖励值的曲线图
-    # plt.plot(episode_rewards)
-    # plt.title("episode_rewards")
-    # plt.show()
-
-    # 绘制最终剩余电量
-    plt.plot(episode_power)
-    plt.title("remain_power")
-    plt.show()
 
 def DQN_test(env, num, max_steps=500):
     # 创建DQN对象
     agent = DQN(env)
 
     # 加载保存的模型权重
-    model_path = f'./model/dqn_model_car_{num}.pth'
+    model_path = f'模型/dqn_model_car_{num}.pth'
     agent.model.load_state_dict(torch.load(model_path, weights_only=True))
     agent.model.eval()  # 设置模型为评估模式
 
@@ -202,27 +113,72 @@ def DQN_test(env, num, max_steps=500):
             writer.writerow(row)
 
 
+def save_results(results_detail, results_all):
+
+    # 打开或创建 results.xlsx 文件
+    file_name = "../输出结果/results.xlsx"
+    try:
+        wb = openpyxl.load_workbook(file_name)
+    except FileNotFoundError:
+        wb = Workbook()
+        if 'Sheet' in wb.sheetnames:
+            wb.remove(wb['Sheet'])
+
+    # 如果表不存在，创建 "调度详情"
+    if "调度详情" not in wb.sheetnames:
+        ws_detail = wb.create_sheet(title="调度详情")
+    else:
+        ws_detail = wb["调度详情"]
+
+    # 如果表不存在，创建 "汇总"
+    if "汇总" not in wb.sheetnames:
+        ws_all = wb.create_sheet(title="汇总")
+    else:
+        ws_all = wb["汇总"]
+
+    # 清空表
+    ws_detail.delete_rows(1, ws_detail.max_row)
+    ws_all.delete_rows(1, ws_all.max_row)
+
+    # 将数据写入 Excel
+    for data_set in results_detail:
+        for row_data in data_set:
+            row = []
+            for item in row_data:
+                if isinstance(item, list) or isinstance(item, tuple):
+                    # 将元组或列表作为字符串存入单元格
+                    row.append(str(item))
+                else:
+                    row.append(item)
+
+            # 将行添加到 Excel
+            ws_detail.append(row)
+
+    for data_set in results_all:
+        for row_data in data_set:
+            ws_all.append(row_data)  # 直接追加每一行的子列表
+
+    # 计算第二列的总和
+    second_column_sum = 0
+    for row in ws_all.iter_rows(min_row=1, max_row=ws_all.max_row, min_col=2, max_col=2):
+        for cell in row:
+            second_column_sum += cell.value
+
+    # 在最后一行写入 'total' 和第二列的总和
+    ws_all.append(['total', second_column_sum])
+
+    # 保存 Excel 文件
+    wb.save(file_name)
+
 
 if __name__ == '__main__':
     EVs, env_info = init_data()
     # print(json.dumps(EVs_50, indent=2))
 
-    # 训练50辆车
-    for i in range(len(EVs)):
-        env = EVs_Env(EVs[i], env_info)
-        env.reset()
-        DQN_train(env, i)
-
 
     # 生成50轮结果，即50轮总电量，最后取平均值
     res = np.array([])
     for k in range(50):
-        # 打开 CSV 文件，使用写模式 'w' 清空文件内容
-        with open('../输出结果/results_all.csv', 'w', newline='', encoding='utf-8') as file:
-            pass  # 不写入任何内容，相当于清空文件
-        # 打开 CSV 文件，使用写模式 'w' 清空文件内容
-        with open('../输出结果/results_detail.csv', 'w', newline='', encoding='utf-8') as file:
-            pass  # 不写入任何内容，相当于清空文件
 
         # 测试50辆车
         for i in range(len(EVs)):
@@ -230,7 +186,7 @@ if __name__ == '__main__':
             env.reset()
             DQN_test(env, i)
 
-        # 读取 CSV 文件
+        # 读取 CSV 文件 
         df = pd.read_csv('../输出结果/results_all.csv', header=None)
 
         # 获取第二列并计算和（假设第二列的索引为1）
@@ -240,10 +196,3 @@ if __name__ == '__main__':
     print(f'均值：{res.mean()}')
     print(f'最大值：{res.max()}')
     print(f'最小值：{res.min()}')
-
-
-    # 单辆测试
-    # env = EVs_Env(EVs[0], env_info)
-    # env.reset()
-    # DQN_train(env, 0)
-    # DQN_test(env, 0)
